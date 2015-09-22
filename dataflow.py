@@ -1,8 +1,11 @@
 """Extract file read and file write statements from jupyter notebooks.
 Try to figure out the data flow from the file names.
 """
+
+import os.path
 import re
 import nbformat
+import argparse
 from graphviz import Digraph
 
 reader_names = ['read_csv']
@@ -52,6 +55,13 @@ def construct_dict(dir_name, fnames):
         workflow[name] = {'input': input_files, 'output': output_files}
     return workflow
 
+def data_colour(fname):
+    """Colour nodes based on file extension"""
+    colour = {'.csv': 'palegreen',
+              '.pdf': 'lightblue',
+              '.pickle': 'yellow'}
+    extension = os.path.splitext(fname)[1]
+    return colour[extension]
 
 def to_graphviz(workflow):
     """Convert dictionary to a dot graph."""
@@ -61,21 +71,22 @@ def to_graphviz(workflow):
     cache = {}
 
     for nbname, v in workflow.items():
-        g.node(nbname, shape='box')
+        g.node(nbname, shape='box3d')
         for fname in v['input']:
             if fname not in seen:
                 seen.add(fname)
-                g.node(fname, shape='hexagon')
+                g.node(fname, shape='octagon', style='filled',
+                        fillcolor=data_colour(fname))
             g.edge(fname, nbname)
         for fname in v['output']:
             if fname not in seen:
                 seen.add(fname)
-                g.node(fname, shape='hexagon')
+                g.node(fname, shape='octagon', style='filled',
+                        fillcolor=data_colour(fname))
             g.edge(nbname, fname)
     return g
 
-
-if __name__ == '__main__':
+def demo():
     fnames = []
     dir_name = 'examples'
     for name in ['toyA', 'toyB', 'toyC']:
@@ -85,4 +96,25 @@ if __name__ == '__main__':
     g = to_graphviz(workflow)
     data = g.pipe(format='pdf')
     with open('toy.pdf', 'wb') as f:
+        f.write(data)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('targets', help='List of files to analyse',
+                        nargs='*')
+    parser.add_argument('-d', '--directory', help='Folder name (default is .)',
+                        nargs='?', default='.')
+    parser.add_argument('-o', '--output', help='PDF file name (default dataflow.pdf)',
+                        nargs='?', default='mydataflow.pdf')
+    args = parser.parse_args()
+
+    targets = [t for t in args.targets]
+    if len(targets) == 0:
+        print('---- Nothing to do ----')
+        parser.print_help()
+        exit(0)
+    workflow = construct_dict(args.directory, targets)
+    graph = to_graphviz(workflow)
+    data = graph.pipe(format='pdf')
+    with open(args.output, 'wb') as f:
         f.write(data)
