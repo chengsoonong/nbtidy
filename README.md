@@ -1,6 +1,16 @@
 # nbtidy
 Tidying jupyter notebooks
 
+## Visualise the flow of data
+
+By looking at the code sections of jupyter notebooks, try to figure out when files are read and written. Construct a graph showing the flow, and render it as a PDF.
+
+```bash
+python dataflow.py -d examples toyA.ipynb toyB.ipynb toyC.ipynb -o toy.pdf
+```
+
+The results are in toy.pdf
+
 ## Tidying up worksheets
 
 We are using [jupyter notebooks](https://jupyter.org/) for the tutorial exercises and assignments in the [Introduction to Statistical Machine Learning](http://programsandcourses.anu.edu.au/course/comp4670) course. The tool ```ipynbhelper.py``` was written mainly to strip the solution cells from tutorial sheets.
