@@ -73,9 +73,12 @@ def data_colour(fname):
     extension = os.path.splitext(fname)[1]
     return colour[extension]
 
-def to_graphviz(workflow):
+def to_graphviz(workflow, LR):
     """Convert dictionary to a dot graph."""
-    g = Digraph(graph_attr={'rankdir': 'LR'})
+    if LR:
+        g = Digraph(graph_attr={'rankdir': 'LR'})
+    else:
+        g = Digraph(graph_attr={'rankdir': 'TB'})
 
     seen = set()
     cache = {}
@@ -118,6 +121,11 @@ if __name__ == '__main__':
                         nargs='?', default='.')
     parser.add_argument('-o', '--output', help='PDF file name (default dataflow.pdf)',
                         nargs='?', default='mydataflow.pdf')
+    parser.add_argument('-t', '--topdown', help='Draw graph top to bottom (default is left to right)',
+                        dest='LR', action='store_false')
+    parser.add_argument('-l', '--leftright', help='Draw graph left to right (default)',
+                        dest='LR', action='store_true')
+    parser.set_defaults(LR=True)
     args = parser.parse_args()
 
     targets = [t for t in args.targets]
@@ -126,7 +134,7 @@ if __name__ == '__main__':
         parser.print_help()
         exit(0)
     workflow = construct_dict(args.directory, targets)
-    graph = to_graphviz(workflow)
+    graph = to_graphviz(workflow, args.LR)
     data = graph.pipe(format='pdf')
     with open(args.output, 'wb') as f:
         f.write(data)
