@@ -8,7 +8,7 @@ import nbformat
 import argparse
 from graphviz import Digraph
 
-reader_names = ['\.read_csv', '\.read_hdf']
+reader_names = ['\.read_csv', '\.read_hdf', '\.Open', '\.open']
 writer_names = ['\.to_csv', '\.savefig', '\.to_hdf']
 
 def find_filenames(fname):
@@ -58,6 +58,7 @@ def construct_dict(dir_name, fnames):
     """
     workflow = {}
     for name in fnames:
+        print('Processing %s' % name)
         input_files, output_files = find_filenames(dir_name+'/'+name)
         workflow[name] = {'input': input_files, 'output': output_files}
     return workflow
@@ -69,16 +70,26 @@ def data_colour(fname):
               '.pickle': 'yellow',
               '.gz': 'palegreen1',
               '.png': 'lightblue1',
-              '.h5': 'palegreen2'}
+              '.h5': 'palegreen2',
+              '.shp': 'palegreen3',
+              '.dbf': 'palegreen3',
+              }
     extension = os.path.splitext(fname)[1]
-    return colour[extension]
+    try:
+        c = colour[extension]
+    except KeyError:
+        print('Unknown extension for file name')
+        print(fname)
+        c = 'tomato'
+    return c
 
 def to_graphviz(workflow, LR):
     """Convert dictionary to a dot graph."""
+    g = Digraph(name='dataflow')
     if LR:
-        g = Digraph(graph_attr={'rankdir': 'LR'})
+        g.graph_attr['rankdir'] = 'LR'
     else:
-        g = Digraph(graph_attr={'rankdir': 'TB'})
+        g.graph_attr['rankdir'] = 'TB'
 
     seen = set()
     cache = {}

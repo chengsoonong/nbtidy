@@ -6,6 +6,11 @@ Tidying jupyter notebooks
 By looking at the code sections of jupyter notebooks, try to figure out when files are read and written. Construct a graph showing the flow, and render it as a PDF.
 
 ```bash
+# Generate some data
+cd examples
+python generate_toy.py
+cd ..
+# Draw the dataflow diagram
 python dataflow.py -d examples toyA.ipynb toyB.ipynb toyC.ipynb -t -o toy.pdf
 ```
 
