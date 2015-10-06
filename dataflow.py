@@ -33,16 +33,14 @@ def code2name(code_str, keywords):
     names = []
     for keyword in keywords:
         for match in re.finditer(r'(.*)%s(.*)' % keyword, code_str):
-            if '"' in match.group(2):
-                fname = match.group(2).split('"')[1]
-            elif "'" in match.group(2):
-                fname = match.group(2).split("'")[1]
-            elif '(' in match.group(2):
-                fname = match.group(2).split('(')[1].split(')')[0].split(',')[0]
+            # get rid of the brackets
+            to_parse = match.group(2).split('(')[1].split(')')[0].split(',')[0]
+            if '"' in to_parse:
+                fname = to_parse.split('"')[1]
+            elif "'" in to_parse:
+                fname = to_parse.split("'")[1]
             else:
-                print('No file name found')
-                print(code_str)
-                raise(NotImplementedError)
+                fname = to_parse
             names.append(fname)
     return names
 
