@@ -37,6 +37,8 @@ def code2name(code_str, keywords):
                 fname = match.group(2).split('"')[1]
             elif "'" in match.group(2):
                 fname = match.group(2).split("'")[1]
+            elif '(' in match.group(2):
+                fname = match.group(2).split('(')[1].split(')')[0].split(',')[0]
             else:
                 print('No file name found')
                 print(code_str)
