@@ -8,10 +8,12 @@ import nbformat
 import argparse
 from graphviz import Digraph
 
-reader_names = ['\.read_csv', '\.read_hdf', '\.Open', '\.open']
-writer_names = ['\.to_csv', '\.savefig', '\.to_hdf']
 
-def find_filenames(fname):
+# ambiguous = ['\.Open', '\.open']
+reader_names = ['\.read_csv', '\.read_hdf', '\.load']
+writer_names = ['\.to_csv', '\.savefig', '\.to_hdf', '\.dump']
+
+def find_filenames(fname, verbose):
     """Look inside code cells, extract filenames"""
     nb = nbformat.read(fname, as_version=4)
     input_files = []
@@ -20,21 +22,28 @@ def find_filenames(fname):
         if cell.cell_type != 'code':
             continue
         cell_id = cell.execution_count
-        if cell_id is not None:
-            #print('Code cell %d' % cell_id)
-            code_str = cell.source
-            #print(code_str)
-            input_files.extend(code2name(code_str, reader_names))
-            output_files.extend(code2name(code_str, writer_names))
+        if verbose and cell_id is not None:
+            print('Code cell %d' % cell_id)
+        code_str = cell.source
+        if verbose:
+            print(code_str)
+        input_files.extend(code2name(code_str, reader_names, verbose))
+        output_files.extend(code2name(code_str, writer_names, verbose))
     return input_files, output_files
 
-def code2name(code_str, keywords):
+def code2name(code_str, keywords, verbose):
     """Extract the file name from a piece of code"""
     names = []
     for keyword in keywords:
         for match in re.finditer(r'(.*)%s(.*)' % keyword, code_str):
+            if verbose:
+                print('code2name: %s' % match)
             # get rid of the brackets
-            to_parse = match.group(2).split('(')[1].split(')')[0].split(',')[0]
+            try:
+                to_parse = match.group(2).split('(')[1].split(')')[0].split(',')[0]
+            except IndexError:
+                print('Could not parse %s' % match)
+                continue
             if '"' in to_parse:
                 fname = to_parse.split('"')[1]
             elif "'" in to_parse:
@@ -44,35 +53,34 @@ def code2name(code_str, keywords):
             names.append(fname)
     return names
 
-def debug_parser(fname):
-    print('parsing %s' % fname)
-    input_files, output_files = find_filenames(fname)
-    print('Input files')
-    print(input_files)
-    print('Output files')
-    print(output_files)
-
-def construct_dict(dir_name, fnames):
+def construct_dict(dir_name, fnames, verbose):
     """Contruct a dictionary, like a dask graph,
     from the list of input notebooks.
     """
     workflow = {}
     for name in fnames:
         print('Processing %s' % name)
-        input_files, output_files = find_filenames(dir_name+'/'+name)
+        input_files, output_files = find_filenames(dir_name+'/'+name, verbose)
+        if verbose:
+            print('Input files')
+            print(input_files)
+            print('Output files')
+            print(output_files)
+
         workflow[name] = {'input': input_files, 'output': output_files}
     return workflow
 
 def data_colour(fname):
     """Colour nodes based on file extension"""
-    colour = {'.csv': 'palegreen',
-              '.pdf': 'lightblue',
+    colour = {'.csv':    'palegreen',
+              '.pdf':    'lightblue',
               '.pickle': 'yellow',
-              '.gz': 'palegreen1',
-              '.png': 'lightblue1',
-              '.h5': 'palegreen2',
-              '.shp': 'palegreen3',
-              '.dbf': 'palegreen3',
+              '.pkl':    'yellow',
+              '.gz':     'palegreen1',
+              '.png':    'lightblue1',
+              '.h5':     'palegreen2',
+              '.shp':    'palegreen3',
+              '.dbf':    'palegreen3',
               }
     extension = os.path.splitext(fname)[1]
     try:
@@ -137,6 +145,9 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--leftright', help='Draw graph left to right (default)',
                         dest='LR', action='store_true')
     parser.set_defaults(LR=True)
+    parser.add_argument('-v', '--verbose', help='Verbose output (default=False)',
+                        dest='V', action='store_true')
+    parser.set_defaults(V=False)
     args = parser.parse_args()
 
     targets = [t for t in args.targets]
@@ -144,7 +155,7 @@ if __name__ == '__main__':
         print('---- Nothing to do ----')
         parser.print_help()
         exit(0)
-    workflow = construct_dict(args.directory, targets)
+    workflow = construct_dict(args.directory, targets, args.V)
     graph = to_graphviz(workflow, args.LR)
     data = graph.pipe(format='pdf')
     with open(args.output, 'wb') as f:
