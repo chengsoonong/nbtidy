@@ -28,13 +28,24 @@ try:
     FileNotFoundError
 except NameError:
     FileNotFoundError = IOError
-
+    
+solution_placeholder_markdown = u'### <span style="color:blue">Answer</span>\n<i>--- replace this with your solution, add and remove code and markdown cells as appropriate ---</i>'
+solution_placeholder_code = u'# replace this with your solution, add and remove code and markdown cells as appropriate'
+solution_markers = ['# solution', '## solution', '### solution', '#### solution']
 
 assert KernelManager  # to silence pyflakes
 
 
+def is_solution_cell(cell):
+    cell_start = cell.source.lower()[:30]
+    is_solution = False
+    for s in solution_markers:
+        if cell_start.startswith(s):
+            is_solution = True
+    return is_solution
+
+
 def remove_outputs(nb):
-    """Remove the code outputs from a notebook"""
     num_outputs = 0
     for cell in nb.cells:
         if cell.cell_type == 'code':
@@ -45,34 +56,28 @@ def remove_outputs(nb):
     print('removed %d code outputs' % num_outputs)
 
 def remove_solution_code(nb):
-    """Remove code cells that start with # Solution"""
     scrubbed = 0
     cells = 0
     for cell in nb.cells:
         if cell.cell_type != 'code':
             continue
         cells += 1
-        # scrub cells marked with initial '# Solution' comment
-        # any other marker will do, or it could be unconditional
-        if cell.source.startswith('# Solution'):
-            cell.source = u'# Solution goes here'
+        if is_solution_cell(cell):
+            cell.source = solution_placeholder_code
             scrubbed += 1
             cell.outputs = []
-    #print('scrubbed %i/%i code cells from notebook %s' % (scrubbed, cells, nb.metadata.name))
     print('scrubbed %i/%i code cells from notebook' % (scrubbed, cells))
 
 def remove_solution_text(nb):
-    """Remove markdown cells that start with ### Solution"""
     scrubbed = 0
     cells = 0
     for cell in nb.cells:
         if cell.cell_type != 'markdown':
             continue
         cells += 1
-        # scrub cells marked with initial '### Solution' comment on a line by itself
-        if cell.source.startswith(u'### Solution'):
+        if is_solution_cell(cell):
             scrubbed += 1
-            cell.source = u'### Solution description'
+            cell.source = solution_placeholder_markdown
     print('scrubbed %i/%i markdown cells from notebook' % (scrubbed, cells))
 
 def run_cell(kernel_client, cell, timeout=300):
@@ -95,7 +100,7 @@ def run_cell(kernel_client, cell, timeout=300):
     outs = []
     while True:
         try:
-            msg = kernel_client.get_iopub_msg(timeout=0.2)
+            msg = kernel_client.get_iopub_msg(timeout=2)
         except Empty:
             break
         msg_type = msg['msg_type']
@@ -111,13 +116,11 @@ def run_cell(kernel_client, cell, timeout=300):
             out.name = content['name']
             out.text = content['text']
         elif msg_type in ('display_data', 'execute_result'):
-            for mime, data in content['data'].items():
-                attr = mime.split('/')[-1].lower()
-                # this gets most right, but fix svg+html, plain
-                attr = attr.replace('+xml', '').replace('plain', 'text')
-                setattr(out, attr, data)
+            out.metadata = content['metadata']
+            out.data = content['data']
             if msg_type == 'execute_result':
                 out.execution_count = content['execution_count']
+
         elif msg_type == 'error':
             out.ename = content['ename']
             out.evalue = content['evalue']
@@ -186,85 +189,71 @@ def run_notebook(nb):
     del km
 
 
-def process_notebook_file(fname, action='clean', output_fname=None):
-    print("Performing '{}' on: {}".format(action, fname))
+def process_notebook_file(fname, action, output_fname):
+    print('-' * 20 + '\n', action, '\n', fname, '\n', output_fname, '\n', '-' * 20 + '\n')
+    
     orig_wd = os.getcwd()
     with io.open(fname, 'r') as f:
         nb = nbformat.read(f, as_version=4)
+    os.chdir(os.path.dirname(fname))
 
     if action == 'check':
-        os.chdir(os.path.dirname(fname))
         run_notebook(nb)
-        remove_outputs(nb)
-    elif action == 'render':
-        os.chdir(os.path.dirname(fname))
+    elif action == 'sol':
         run_notebook(nb)
-    elif action == 'worksheet':
-        os.chdir(os.path.dirname(fname))
+    elif action == 'work':
         run_notebook(nb)
         remove_outputs(nb)
         remove_solution_text(nb)
         remove_solution_code(nb)
-    else:
-        # Clean by default
+    elif action == 'clean':
         remove_outputs(nb)
+        assert output_fname is None
+        output_fname = fname
+    else:
+        raise Exception(action)
 
     os.chdir(orig_wd)
-    if output_fname is None:
-        output_fname = fname
-    with io.open(output_fname, 'w') as f:
-        nb = nbformat.write(nb, f)
 
-def take_action(action, targets):
-    rendered_folder = os.path.join(os.path.dirname(__file__), '../../tutorial')
-    if not os.path.exists(rendered_folder):
-        os.makedirs(rendered_folder)
-    if not targets:
-        targets = [os.path.join(os.path.dirname(__file__), 'notebooks')]
+    if output_fname is not None:
+        with io.open(output_fname, 'w') as f:
+            nb = nbformat.write(nb, f)
+            print('wrote', output_fname)
 
-    for target in targets:
-        if os.path.isdir(target):
-            fnames = [os.path.abspath(os.path.join(target, f))
-                      for f in os.listdir(target)
-                      if f.endswith('.ipynb')]
-        else:
-            fnames = [target]
-        for fname in fnames:
-            if action == 'render':
-                new_name = os.path.splitext(os.path.basename(fname))[0] + '-sol.ipynb'
-                output_fname = os.path.join(rendered_folder, new_name)
-            elif action == 'worksheet':
-                new_name = os.path.splitext(os.path.basename(fname))[0] + '-work.ipynb'
-                output_fname = os.path.join(rendered_folder, new_name)
-            else:
-                output_fname = fname
-            process_notebook_file(fname, action=action,
-                                  output_fname=output_fname)
+
+def take_action(action, target, outpath):
+    
+    if outpath is None:
+        output_fname = None
+    else:
+        assert os.path.exists(outpath), '%s does not exist' % outpath
+        outpath = os.path.abspath(args.outpath)
+        new_name = os.path.splitext(os.path.basename(target))[0] + ('-%s.ipynb' % action)
+        output_fname = os.path.join(outpath, new_name)
+
+    process_notebook_file(target, action=action, output_fname=output_fname)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('targets', help='List of directories to apply action to',
-                        action='append')
-    parser.add_argument('-c', '--clean', help='Clean up generated files',
-                        action='store_true')
-    parser.add_argument('-d', '--debug', help='Check that notebooks are ok',
-                        action='store_true')
-    parser.add_argument('-r', '--render', help='Render notebooks to outpath',
-                        action='store_true')
-    parser.add_argument('-s', '--solution', help='Render notebook with solutions',
-                        action='store_true')
-    parser.add_argument('-o', '--outpath', help='Output path for rendered notebooks',
-                        )
-    args = parser.parse_args()
+    
+    allowed_actions = ['work', 'sol', 'check', 'clean']
+    outputing_actions = ['work', 'sol', 'clean']
 
-    targets = [t for t in args.targets]
-    if args.render:
-        if args.solution:
-            take_action('render', targets)
-        else:
-            take_action('worksheet', targets)
-    if args.debug:
-        take_action('check', targets)
-    if args.clean:
-        take_action('clean', targets)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('action', help='|'.join(allowed_actions), type=str)
+    parser.add_argument('target', help='target file path', type=str)
+    parser.add_argument('-o', '--outpath', dest='outpath', help='output directory path', type=str, default=None)
+    
+    args = parser.parse_args()
+    args.target = os.path.abspath(args.target)
+
+    assert args.action in allowed_actions, args.action
+    if args.action in outputing_actions:
+        assert args.outpath is not None, ('outpath reqired for action = ' + args.action)
+    else:
+        assert args.outpath is None, ('outpath not required for action = ' + args.action)
+    if args.action == 'clean':
+        assert args.outpath == 'overwrite', 'outpath must equal "overwrite"'
+        args.outpath = None
+
+    take_action(args.action, args.target, args.outpath)
