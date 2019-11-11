@@ -73,6 +73,7 @@ def construct_dict(dir_name, fnames, verbose):
 def data_colour(fname):
     """Colour nodes based on file extension"""
     colour = {'.csv':    'palegreen',
+              '.tsv':    'palegreen',
               '.pdf':    'lightblue',
               '.pickle': 'yellow',
               '.pkl':    'yellow',
