@@ -3,6 +3,12 @@ Tidying jupyter notebooks
 
 ## Visualise the flow of data
 
+#### Dependencies
+
+- graphviz
+- nbformat
+
+#### Quick start
 By looking at the code sections of jupyter notebooks, try to figure out when files are read and written. Construct a graph showing the flow, and render it as a PDF.
 
 ```bash
@@ -28,4 +34,3 @@ We are using [jupyter notebooks](https://jupyter.org/) for the tutorial exercise
 * [nbconvert](http://nbconvert.readthedocs.org/en/latest/) is the main way to interact with the JSON file representing the notebook.
 * [NBDiff](http://nbdiff.org/): A diffing and merging tool for the IPython Notebook
 * [nbgrader](http://nbgrader.readthedocs.org/en/stable/) helps the instructor to manage assignments, with added bells and whistles for [JupyterHub](https://github.com/jupyter/jupyterhub).
-
